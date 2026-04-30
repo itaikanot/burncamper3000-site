@@ -1719,7 +1719,7 @@ function setupEasterEggs() {
   const title = document.getElementById('main-title');
   if (title) title.addEventListener('click', () => {
     titleClickCount++;
-    if (titleClickCount === 7) activateShabbatShalomMode();
+    if (titleClickCount === 3) activateShabbatShalomMode();
   });
   window.addEventListener('keydown', (e) => {
     if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
