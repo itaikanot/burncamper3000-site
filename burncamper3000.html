@@ -187,9 +187,9 @@ body::after {
 }
 
 /* ── VEHICLES ── */
-.vehicle-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.vehicle-list, .people-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 
-.vehicle-item {
+.vehicle-item, .person-item {
   border: 1px solid rgba(57,255,20,0.4);
   padding: 10px;
   background: rgba(0,30,0,0.5);
@@ -201,6 +201,21 @@ body::after {
   grid-template-columns: 1.4fr 0.8fr 0.8fr 0.7fr 1fr auto;
   gap: 8px;
   align-items: center;
+}
+
+.person-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.2fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.person-item .v-label {
+  font-family: 'VT323', monospace;
+  font-size: 1.1em;
+  color: var(--cyan);
+  text-shadow: 0 0 4px var(--cyan);
+  margin-bottom: 6px;
 }
 
 .vehicle-item .v-label {
@@ -468,7 +483,7 @@ select option { background: #001a00; color: var(--green); }
 
 .mat-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto 120px auto;
   gap: 6px;
   align-items: center;
   padding: 4px 0;
@@ -489,6 +504,14 @@ select option { background: #001a00; color: var(--green); }
   transition: opacity 0.15s, background 0.15s;
 }
 .mat-del:hover { opacity: 1; background: rgba(255,0,110,0.18); }
+
+.mat-assignee, .task-assignee { width: 100%; font-size: 0.78em; padding: 3px 5px; }
+
+.task-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.task-item { display: grid; grid-template-columns: auto 1fr 160px; gap: 10px; align-items: center; border: 1px solid rgba(0,255,255,0.22); background: rgba(0,20,25,0.45); padding: 10px; }
+.task-item.done .task-title { text-decoration: line-through; opacity: 0.55; }
+.task-phase { color: var(--orange); font-size: 0.78em; }
+.task-title { color: var(--cyan); }
 
 .mat-add-row {
   display: flex;
@@ -931,6 +954,13 @@ select option { background: #001a00; color: var(--green); }
       <button class="btn-add" onclick="addVehicle()">[ + ADD VEHICLE / RV / TRAILER ]</button>
     </div>
 
+    <!-- PEOPLE PANEL -->
+    <div class="panel">
+      <div class="section-label">► CAMP PEOPLE / ASSIGNEES</div>
+      <div class="people-list" id="peopleList"></div>
+      <button class="btn-add" onclick="addPerson()">[ + ADD CAMPMATE ]</button>
+    </div>
+
     <!-- FEATURES PANEL -->
     <div class="panel">
       <div class="section-label">► CAMP FEATURES</div>
@@ -1045,7 +1075,8 @@ select option { background: #001a00; color: var(--green); }
   <div class="output-section" id="outputSection">
     <div class="tab-bar">
       <button class="tab-btn active" onclick="showTab('layout')">[ CAMP LAYOUT ]</button>
-      <button class="tab-btn" onclick="showTab('materials')">[ MATERIALS LIST ]</button>
+      <button class="tab-btn" onclick="showTab('materials')">[ EQUIPMENT LIST ]</button>
+      <button class="tab-btn" onclick="showTab('tasks')">[ TASKS ]</button>
       <button class="tab-btn" onclick="showTab('instructions')">[ SETUP GUIDE ]</button>
     </div>
 
@@ -1057,12 +1088,16 @@ select option { background: #001a00; color: var(--green); }
         <canvas id="campCanvas" width="900" height="700"></canvas>
       </div>
       <div class="canvas-info">
-        TOP-DOWN VIEW :: NORTH = UP :: PREVAILING WIND FROM SW :: DRAG ANY BLOCK TO REPOSITION
+        TOP-DOWN VIEW :: NORTH = UP :: 1FT GRID :: DRAG / RESIZE BLOCKS TO REPOSITION
       </div>
     </div>
 
     <div class="tab-content" id="tab-materials">
       <div class="materials-output" id="materialsOutput"></div>
+    </div>
+
+    <div class="tab-content" id="tab-tasks">
+      <div class="task-list" id="tasksOutput"></div>
     </div>
 
     <div class="tab-content" id="tab-instructions">
@@ -1303,7 +1338,10 @@ function serializeCampState() {
     layoutStyle: document.getElementById('layoutStyle').value,
     extraNotes:  document.getElementById('extraNotes').value,
     vehicles:    getVehicles(),
+    people:      getCampPeople(),
     features:    getFeatures(),
+    materials:   materialsData,
+    tasks:       tasksData,
     elements:    campElements.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
   };
 }
@@ -1321,6 +1359,12 @@ function restoreCampData(d) {
     d.vehicles.forEach(v => addVehicle(v));
   }
 
+  if (d.people?.length) {
+    document.getElementById('peopleList').innerHTML = '';
+    personCounter = 0;
+    d.people.forEach(person => addPerson(person));
+  }
+
   if (d.features) {
     ['shade','kitchen','stage','generator','firepit','art','lounge','yoga','water','bar','bike','medical']
       .forEach(k => {
@@ -1334,6 +1378,8 @@ function restoreCampData(d) {
 
   // Generate layout then overlay saved positions
   generateCampSilent();
+  if (d.materials?.length) { materialsData = normalizeMaterials(d.materials); renderMaterials(); }
+  if (d.tasks?.length) { tasksData = normalizeTasks(d.tasks); renderTasks(); }
   if (d.elements?.length) {
     d.elements.forEach(saved => {
       const el = campElements.find(e => e.id === saved.id);
@@ -1403,10 +1449,14 @@ let selectedElem   = null;
 let hoverElem      = null;
 let eventsSetup    = false;
 const HANDLE_R     = 5;   // resize handle half-size in px
-const GRID         = 40;  // grid cell size in px
-function snap(v)   { return Math.round(v / GRID) * GRID; }
-let materialsData  = [];   // mutable materials categories
-const SCALE        = 6.5;  // pixels per foot
+const SCALE        = 8;   // pixels per foot
+const GRID_FT      = 1;   // grid cell size in feet
+const GRID         = SCALE * GRID_FT;
+function ftToPx(ft) { return ft * SCALE; }
+function pxToFt(px) { return px / SCALE; }
+function snap(v) { return ftToPx(Math.round(pxToFt(v) / GRID_FT) * GRID_FT); }
+let materialsData  = [];   // mutable equipment/material categories
+let tasksData      = [];   // mutable setup tasks
 
 const VEHICLE_COLORS = {
   rv: '#8B6914',
@@ -1502,6 +1552,97 @@ function getVehicles() {
   return vehicles;
 }
 
+let personCounter = 0;
+
+function nextPersonId() {
+  let n = personCounter + 1;
+  const existing = new Set(getCampPeople().map(p => p.id));
+  while (existing.has(`person-${n}`)) n++;
+  personCounter = n;
+  return `person-${n}`;
+}
+
+function addPerson(preset) {
+  const id = preset?.id || nextPersonId();
+  const numeric = /^person-(\d+)$/.exec(id)?.[1];
+  if (numeric) personCounter = Math.max(personCounter, parseInt(numeric, 10));
+  else personCounter++;
+  const p = preset || {};
+  const el = document.createElement('div');
+  el.className = 'person-item';
+  el.id = `person-row-${personCounter}`;
+  el.dataset.personId = id;
+  el.innerHTML = `
+    <div class="v-label">CAMPMATE #${personCounter}</div>
+    <div class="person-row">
+      <div><label>NAME</label><input type="text" class="person-name" value="${escAttr(p.name||'')}" placeholder="e.g. Itai"></div>
+      <div><label>EMAIL / NOTE</label><input type="text" class="person-email" value="${escAttr(p.email||'')}" placeholder="optional"></div>
+      <div><label>ROLE</label><input type="text" class="person-role" value="${escAttr(p.role||'')}" placeholder="kitchen, shade..."></div>
+      <button class="btn-remove" onclick="removePerson('${el.id}')" title="Remove">✕</button>
+    </div>`;
+  document.getElementById('peopleList').appendChild(el);
+  refreshAssigneeControls();
+}
+
+function removePerson(rowId) {
+  const el = document.getElementById(rowId);
+  const removedId = el?.dataset.personId;
+  if (el) el.remove();
+  clearRemovedAssignee(removedId);
+  refreshAssigneeControls();
+}
+
+function clearRemovedAssignee(removedId) {
+  if (!removedId) return;
+  materialsData.forEach(cat => (cat.items || []).forEach(item => {
+    if (item.assigneeId === removedId) item.assigneeId = '';
+  }));
+  tasksData.forEach(task => {
+    if (task.assigneeId === removedId) task.assigneeId = '';
+  });
+}
+
+function getCampPeople() {
+  return Array.from(document.querySelectorAll('.person-item')).map((row, idx) => {
+    const name = row.querySelector('.person-name').value.trim();
+    return {
+      id: row.dataset.personId || `person-${idx + 1}`,
+      name: name || `Camper ${idx + 1}`,
+      email: row.querySelector('.person-email').value.trim(),
+      role: row.querySelector('.person-role').value.trim()
+    };
+  });
+}
+
+function assigneeOptions(selectedId='') {
+  const people = getCampPeople();
+  return `<option value="">Unassigned</option>` + people.map(p =>
+    `<option value="${escAttr(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escHtml(p.name)}</option>`
+  ).join('');
+}
+
+function assigneeName(id) {
+  return getCampPeople().find(p => p.id === id)?.name || 'Unassigned';
+}
+
+function refreshAssigneeControls() {
+  const validIds = new Set(getCampPeople().map(p => p.id));
+  materialsData.forEach(cat => (cat.items || []).forEach(item => {
+    if (item.assigneeId && !validIds.has(item.assigneeId)) item.assigneeId = '';
+  }));
+  tasksData.forEach(task => {
+    if (task.assigneeId && !validIds.has(task.assigneeId)) task.assigneeId = '';
+  });
+  document.querySelectorAll('.mat-assignee').forEach(sel => {
+    const current = validIds.has(sel.value) ? sel.value : '';
+    sel.innerHTML = assigneeOptions(current);
+  });
+  document.querySelectorAll('.task-assignee').forEach(sel => {
+    const current = validIds.has(sel.value) ? sel.value : '';
+    sel.innerHTML = assigneeOptions(current);
+  });
+}
+
 // ────────────────────────────────────────────────
 // FEATURE TOGGLES
 // ────────────────────────────────────────────────
@@ -1535,7 +1676,7 @@ function getFeatures() {
 // ────────────────────────────────────────────────
 function showTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b,i) => {
-    const tabs = ['layout','materials','instructions'];
+    const tabs = ['layout','materials','tasks','instructions'];
     b.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1559,10 +1700,11 @@ function generateCamp() {
   const days     = parseInt(document.getElementById('campDays').value) || 7;
   const layout   = document.getElementById('layoutStyle').value;
   const notes    = document.getElementById('extraNotes').value;
+  const people   = getCampPeople();
 
   if (vehicles.length === 0) { alert('ADD AT LEAST ONE VEHICLE FIRST!'); return; }
 
-  campData = { vehicles, features, totalPpl, days, layout, notes };
+  campData = { vehicles, people, features, totalPpl, days, layout, notes };
   setStatus('COMPUTING LAYOUT...');
   document.getElementById('outputSection').classList.add('visible');
   showTab('layout');
@@ -1570,6 +1712,7 @@ function generateCamp() {
   setTimeout(() => {
     initCampElements(campData);
     generateMaterials(campData);
+    generateTasks(campData);
     document.getElementById('instructionsOutput').innerHTML = generateInstructions(campData);
     setStatus(`CAMP DESIGNED — ${totalPpl} PEOPLE / ${vehicles.length} VEHICLES :: DRAG ELEMENTS TO REPOSITION`);
   }, 60);
@@ -1588,12 +1731,14 @@ function generateCampSilent() {
   const days     = parseInt(document.getElementById('campDays').value) || 7;
   const layout   = document.getElementById('layoutStyle').value;
   const notes    = document.getElementById('extraNotes').value;
-  campData = { vehicles, features, totalPpl, days, layout, notes };
+  const people   = getCampPeople();
+  campData = { vehicles, people, features, totalPpl, days, layout, notes };
   document.getElementById('outputSection').classList.add('visible');
   initCampElements(campData);
   document.getElementById('materialsOutput').innerHTML    = '';
   document.getElementById('instructionsOutput').innerHTML = '';
   generateMaterials(campData);
+  generateTasks(campData);
   document.getElementById('instructionsOutput').innerHTML = generateInstructions(campData);
 }
 
@@ -1624,10 +1769,10 @@ function initCampElements(data) {
   // ── COMMUNAL ZONE (for initial feature placement) ──
   const minCommArea = Math.max(totalPpl * 28, 800);
   const commSize    = Math.sqrt(minCommArea);
-  let commW = Math.max(campW * 0.7, commSize * SCALE * 0.6);
-  let commH = Math.max(commSize * SCALE * 0.6, 120);
+  let commW = Math.max(campW * 0.7, ftToPx(commSize) * 0.6);
+  let commH = Math.max(ftToPx(commSize) * 0.6, 120);
   let commX = offsetX + campW / 2 - commW / 2;
-  let commY = offsetY - commH - 20 * SCALE * 0.5;
+  let commY = offsetY - commH - ftToPx(20) * 0.5;
   commX = Math.max(40, Math.min(commX, W - commW - 40));
   commY = Math.max(40, Math.min(commY, H - commH - 40));
 
@@ -1684,63 +1829,63 @@ function initCampElements(data) {
 
 function computeVehiclePositions(vehicles, layout) {
   const spacing = 10;
-  const spPx    = spacing * SCALE;
+  const spPx    = ftToPx(spacing);
   const positions = [];
 
   if (layout === 'line') {
     let cx = 0;
     vehicles.forEach(v => {
-      positions.push({ px: cx, py: 0, pw: v.length * SCALE, ph: v.width * SCALE });
-      cx += v.length * SCALE + spPx;
+      positions.push({ px: cx, py: 0, pw: ftToPx(v.length), ph: ftToPx(v.width) });
+      cx += ftToPx(v.length) + spPx;
     });
   } else if (layout === 'u-shape') {
     const n = vehicles.length;
     const leftN = Math.floor(n / 3), backN = Math.ceil(n / 3);
-    const maxVW = Math.max(...vehicles.map(v => v.width * SCALE));
+    const maxVW = Math.max(...vehicles.map(v => ftToPx(v.width)));
     const leftVehicles  = vehicles.slice(0, leftN);
     const backVehicles  = vehicles.slice(leftN, leftN + backN);
     const rightVehicles = vehicles.slice(leftN + backN);
-    const backRowW = backVehicles.reduce((s, v) => s + v.length * SCALE + spPx, 0);
+    const backRowW = backVehicles.reduce((s, v) => s + ftToPx(v.length) + spPx, 0);
 
     let ly = 0;
     leftVehicles.forEach(v => {
-      positions.push({ px: 0, py: ly, pw: v.width * SCALE, ph: v.length * SCALE });
-      ly += v.length * SCALE + spPx;
+      positions.push({ px: 0, py: ly, pw: ftToPx(v.width), ph: ftToPx(v.length) });
+      ly += ftToPx(v.length) + spPx;
     });
     const leftW = leftN > 0 ? maxVW + spPx : 0;
     const armH  = ly;
 
     let bx = leftW;
     backVehicles.forEach(v => {
-      positions.push({ px: bx, py: armH, pw: v.length * SCALE, ph: v.width * SCALE });
-      bx += v.length * SCALE + spPx;
+      positions.push({ px: bx, py: armH, pw: ftToPx(v.length), ph: ftToPx(v.width) });
+      bx += ftToPx(v.length) + spPx;
     });
     const totalW = Math.max(backRowW + leftW, leftW + 100);
 
     let ry = 0;
     rightVehicles.forEach(v => {
-      positions.push({ px: totalW - (leftN > 0 ? maxVW : v.width * SCALE), py: ry, pw: v.width * SCALE, ph: v.length * SCALE });
-      ry += v.length * SCALE + spPx;
+      positions.push({ px: totalW - (leftN > 0 ? maxVW : ftToPx(v.width)), py: ry, pw: ftToPx(v.width), ph: ftToPx(v.length) });
+      ry += ftToPx(v.length) + spPx;
     });
   } else if (layout === 'l-shape') {
     const baseN = Math.ceil(vehicles.length / 2);
-    const maxVW = Math.max(...vehicles.map(v => v.width * SCALE));
+    const maxVW = Math.max(...vehicles.map(v => ftToPx(v.width)));
     let cx = 0;
     vehicles.slice(0, baseN).forEach(v => {
-      positions.push({ px: cx, py: 0, pw: v.length * SCALE, ph: v.width * SCALE });
-      cx += v.length * SCALE + spPx;
+      positions.push({ px: cx, py: 0, pw: ftToPx(v.length), ph: ftToPx(v.width) });
+      cx += ftToPx(v.length) + spPx;
     });
     let ry = maxVW + spPx;
     vehicles.slice(baseN).forEach(v => {
-      positions.push({ px: 0, py: ry, pw: v.width * SCALE, ph: v.length * SCALE });
-      ry += v.length * SCALE + spPx;
+      positions.push({ px: 0, py: ry, pw: ftToPx(v.width), ph: ftToPx(v.length) });
+      ry += ftToPx(v.length) + spPx;
     });
   } else { // circle
     const n = vehicles.length;
     const r = Math.max(80, n * 30);
     vehicles.forEach((v, i) => {
       const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-      positions.push({ px: r + Math.cos(angle) * r, py: r + Math.sin(angle) * r, pw: v.length * SCALE * 0.7, ph: v.width * SCALE });
+      positions.push({ px: r + Math.cos(angle) * r, py: r + Math.sin(angle) * r, pw: ftToPx(v.length) * 0.7, ph: ftToPx(v.width) });
     });
   }
 
@@ -1762,8 +1907,8 @@ function redrawCanvas() {
   // Grid
   ctx.strokeStyle = 'rgba(57,255,20,0.06)';
   ctx.lineWidth   = 1;
-  for (let x = 0; x <= W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 0; y <= H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = 0; x <= W; x += GRID) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y <= H; y += GRID) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
   // Auto-updating camp boundary
   if (campElements.length > 0) {
@@ -1815,7 +1960,7 @@ function redrawCanvas() {
   // Overlays
   drawCompass(ctx, W - 55, 55, 40);
 
-  const scaleBarFt = 20, scaleBarPx = scaleBarFt * SCALE;
+  const scaleBarFt = 20, scaleBarPx = ftToPx(scaleBarFt);
   ctx.fillStyle = 'rgba(57,255,20,0.7)';
   ctx.fillRect(W - 40 - scaleBarPx, H - 30, scaleBarPx, 4);
   ctx.font = '10px Share Tech Mono, monospace';
@@ -2196,8 +2341,8 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   if (!dragState) return;
   const t = e.touches[0], pos = getCanvasPos(e.target, t);
-  dragState.element.x = dragState.startElemX + (pos.x - dragState.startMouseX);
-  dragState.element.y = dragState.startElemY + (pos.y - dragState.startMouseY);
+  dragState.element.x = snap(dragState.startElemX + (pos.x - dragState.startMouseX));
+  dragState.element.y = snap(dragState.startElemY + (pos.y - dragState.startMouseY));
   redrawCanvas();
   e.preventDefault();
 }
@@ -2349,30 +2494,42 @@ function generateMaterials(data) {
     cats.push({ title: '💧 WATER SYSTEM', items: w });
   }
 
-  materialsData = cats;
+  materialsData = normalizeMaterials(cats);
   renderMaterials();
+}
+
+function normalizeMaterials(cats) {
+  return (cats || []).map(cat => ({
+    title: cat.title,
+    items: (cat.items || []).map(item => Array.isArray(item)
+      ? { name: item[0], qty: item[1], note: item[2] || '', assigneeId: item[3] || '' }
+      : { name: item.name, qty: item.qty, note: item.note || '', assigneeId: item.assigneeId || '' })
+  }));
 }
 
 function renderMaterials() {
   document.getElementById('materialsOutput').innerHTML = materialsData.map((cat, ci) => `
     <div class="mat-category">
       <div class="mat-cat-title">${escHtml(cat.title)}</div>
-      ${cat.items.map(([name, qty, note], ii) => `
+      ${cat.items.map((item, ii) => `
         <div class="mat-item">
-          <span>${escHtml(name)}</span>
-          <span class="mat-qty">${escHtml(qty)}</span>
+          <span>${escHtml(item.name)}</span>
+          <span class="mat-qty">${escHtml(item.qty)}</span>
+          <select class="mat-assignee" title="Assigned to" onchange="setMaterialAssignee(${ci},${ii},this.value)">${assigneeOptions(item.assigneeId)}</select>
           <button class="mat-del" onclick="removeMaterial(${ci},${ii})" title="Remove">✕</button>
         </div>
-        ${note ? `<div class="mat-note" style="padding-left:8px;">↳ ${escHtml(note)}</div>` : ''}
+        ${item.note ? `<div class="mat-note" style="padding-left:8px;">↳ ${escHtml(item.note)}</div>` : ''}
       `).join('')}
       <div class="mat-add-row">
-        <input class="mat-add-input" type="text" id="mat-name-${ci}" placeholder="Add item...">
+        <input class="mat-add-input" type="text" id="mat-name-${ci}" placeholder="Add equipment...">
         <input class="mat-add-qty"  type="text" id="mat-qty-${ci}"  placeholder="Qty">
         <button class="mat-add-btn" onclick="addMaterial(${ci})">[ + ADD ]</button>
       </div>
     </div>
   `).join('');
 }
+
+function setMaterialAssignee(ci, ii, assigneeId) { materialsData[ci].items[ii].assigneeId = assigneeId; }
 
 function removeMaterial(ci, ii) {
   materialsData[ci].items.splice(ii, 1);
@@ -2384,15 +2541,40 @@ function addMaterial(ci) {
   const qtyEl  = document.getElementById(`mat-qty-${ci}`);
   const name   = nameEl.value.trim();
   if (!name) { nameEl.focus(); return; }
-  materialsData[ci].items.push([name, qtyEl.value.trim() || '—', '']);
+  materialsData[ci].items.push({ name, qty: qtyEl.value.trim() || '—', note: '', assigneeId: '' });
   renderMaterials();
 }
+
+function normalizeTasks(tasks) {
+  return (tasks || []).map(t => ({ title: t.title, phase: t.phase || '', done: !!t.done, assigneeId: t.assigneeId || '' }));
+}
+
+function generateTasks(data) {
+  const instructions = getInstructionPhases(data);
+  tasksData = normalizeTasks(instructions.flatMap(ph => ph.steps.map(step => ({ phase: ph.title, title: step, done: false, assigneeId: '' }))));
+  renderTasks();
+}
+
+function renderTasks() {
+  const out = document.getElementById('tasksOutput');
+  if (!out) return;
+  out.innerHTML = tasksData.map((task, i) => `
+    <div class="task-item ${task.done ? 'done' : ''}">
+      <input type="checkbox" ${task.done ? 'checked' : ''} onchange="setTaskDone(${i},this.checked)">
+      <div><div class="task-phase">${escHtml(task.phase)}</div><div class="task-title">${escHtml(task.title)}</div></div>
+      <select class="task-assignee" title="Assigned to" onchange="setTaskAssignee(${i},this.value)">${assigneeOptions(task.assigneeId)}</select>
+    </div>
+  `).join('');
+}
+
+function setTaskDone(i, done) { tasksData[i].done = done; renderTasks(); }
+function setTaskAssignee(i, assigneeId) { tasksData[i].assigneeId = assigneeId; }
 
 // ────────────────────────────────────────────────
 // INSTRUCTIONS GENERATOR
 // ────────────────────────────────────────────────
-function generateInstructions(data) {
-  const { vehicles, features, totalPpl, layout, notes } = data;
+function getInstructionPhases(data) {
+  const { vehicles, features, totalPpl, layout } = data;
   const tentPpl = Math.max(0, totalPpl - vehicles.reduce((s,v) => s+v.people, 0));
   const layoutName = { 'line': 'Straight Line', 'u-shape': 'U-Shape', 'l-shape': 'L-Shape', 'circle': 'Loose Circle' }[layout];
 
@@ -2519,6 +2701,12 @@ function generateInstructions(data) {
     }
   ];
 
+  return phases;
+}
+
+function generateInstructions(data) {
+  const { vehicles, totalPpl, notes } = data;
+  const phases = getInstructionPhases(data);
   const bm_tips = [
     'Playa dust is highly alkaline — cover cuts immediately, it causes playa foot (cracked, painful skin)',
     'Whiteouts happen fast. Always have your goggles + mask reachable from your sleeping bag',
@@ -2569,6 +2757,7 @@ window.onload = function() {
   addVehicle({ type: 'rv',  length: 32, width: 8,  people: 3, name: 'The Mothership' });
   addVehicle({ type: 'van', length: 20, width: 7,  people: 2, name: 'VanLife' });
   addVehicle({ type: 'car', length: 15, width: 6,  people: 1, name: 'Support Car' });
+  addPerson({ id: 'person-1', name: 'Itai', role: 'Camp lead' });
 
   setStatus('READY — CONFIGURE YOUR CAMP AND HIT GENERATE');
   bootApp();
