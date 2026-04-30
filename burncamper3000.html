@@ -841,6 +841,28 @@ select option { background: #001a00; color: var(--green); }
   font-size: 1.1em; padding: 5px 16px; cursor: pointer; transition: all 0.15s;
 }
 .invite-close:hover { border-color: var(--green); color: var(--green); }
+
+
+/* ── EASTER EGGS ── */
+body.shabbat-shalom-mode {
+  --green: #1e90ff;
+  --cyan: #ffffff;
+  --pink: #1e90ff;
+  --purple: #0d47a1;
+}
+body.shabbat-shalom-mode .title::after {
+  content: '  ✡ SHABBAT SHALOM ✡';
+  color: #ffffff;
+  text-shadow: 0 0 8px #1e90ff, 0 0 18px #ffffff;
+  display: block;
+  font-size: 0.34em;
+  letter-spacing: 0.18em;
+  margin-top: 4px;
+}
+body.sababa-pulse #campCanvas { box-shadow: 0 0 40px rgba(30,144,255,0.85), 0 0 80px rgba(255,255,255,0.35); }
+body.aliyah-lift .main { animation: aliyah-lift 2s ease-in-out; }
+@keyframes aliyah-lift { 0% { transform: translateY(0); } 45% { transform: translateY(-24px); } 100% { transform: translateY(0); } }
+
 </style>
 </head>
 <body>
@@ -848,7 +870,7 @@ select option { background: #001a00; color: var(--green); }
 <div class="collective-tag">THE SUNNYBURN COLLECTIVE</div>
 <div class="header">
   <div class="header-stars"></div>
-  <div class="title">◈ THE BURNCAMPER 3000 ◈</div>
+  <div class="title" id="main-title" title="Click 7 times if you know the way">◈ THE BURNCAMPER 3000 ◈</div>
   <div class="title-sub">[ BURNING MAN CAMP DESIGN SYSTEM ]</div>
   <div class="version-tag">VER 1.0 :: BLACK ROCK DESERT EDITION :: &copy; 1997-2026<span class="blink">_</span></div>
 </div>
@@ -940,7 +962,7 @@ select option { background: #001a00; color: var(--green); }
         <option value="line">Straight Line (windbreak)</option>
         <option value="u-shape" selected>U-Shape (best wind protection)</option>
         <option value="l-shape">L-Shape</option>
-        <option value="circle">Loose Circle</option>
+        <option value="circle">Loose Circle / Kibbutz Formation</option>
       </select>
     </div>
   </div>
@@ -1118,12 +1140,12 @@ select option { background: #001a00; color: var(--green); }
 <div id="invite-modal">
   <div class="invite-box">
     <div class="invite-box-title">⇗ INVITE CAMPMATES</div>
-    <p style="font-size:0.82em;color:rgba(57,255,20,0.6);margin-bottom:12px;">Share this link. Anyone who opens it will be added to your camp as an editor.</p>
+    <p style="font-size:0.82em;color:rgba(57,255,20,0.6);margin-bottom:12px;">Share this link. Anyone who opens it will be added to your camp as an editor. WELCOME TO THE TRIBE.</p>
     <div class="invite-url-row">
       <input type="text" id="invite-url" readonly>
       <button class="nav-btn invite" id="copy-btn" onclick="copyInviteLink()">[ COPY ]</button>
     </div>
-    <div class="invite-expiry">Link expires in 7 days.</div>
+    <div class="invite-expiry">Link expires in 7 days, as tradition demands.</div>
     <button class="invite-close" onclick="document.getElementById('invite-modal').style.display='none'">[ CLOSE ]</button>
   </div>
 </div>
@@ -1307,7 +1329,7 @@ async function createInviteLink() {
   if (error) { setStatus('ERROR: ' + error.message); return; }
   const url = `${location.origin}${location.pathname}?invite=${data.token}`;
   document.getElementById('invite-url').value = url;
-  document.getElementById('copy-btn').textContent = '[ COPY ]';
+  document.getElementById('copy-btn').textContent = '[ SEND TO THE TRIBE ]';
   document.getElementById('invite-modal').style.display = 'flex';
 }
 
@@ -1327,7 +1349,7 @@ async function handleInvite(token) {
 function copyInviteLink() {
   const inp = document.getElementById('invite-url');
   inp.select(); document.execCommand('copy');
-  document.getElementById('copy-btn').textContent = '[ COPIED! ]';
+  document.getElementById('copy-btn').textContent = '[ SENT TO THE TRIBE! ]';
 }
 
 // ── STATE SAVE / RESTORE ──────────────────────
@@ -1435,6 +1457,7 @@ async function bootApp() {
   } else {
     showScreen('auth');
   }
+  updateShabbatAwareMessage();
 }
 
 // ────────────────────────────────────────────────
@@ -1641,6 +1664,114 @@ function refreshAssigneeControls() {
     const current = validIds.has(sel.value) ? sel.value : '';
     sel.innerHTML = assigneeOptions(current);
   });
+}
+
+
+// ────────────────────────────────────────────────
+// EASTER EGGS — tiny cultural glitches hidden in the dust
+// ────────────────────────────────────────────────
+let titleClickCount = 0;
+let secretPhraseBuffer = '';
+const easterStatusMessages = [
+  'REMEMBER: DUST THOU ART',
+  'MANNA SUPPLY: LOW',
+  'GENERATING ERUV PERIMETER...',
+  'CALCULATING SHADE STRUCTURE ACCORDING TO BEIT HILLEL',
+  'WARNING: GOLDEN CALF DETECTED NEAR DJ STAGE',
+  'SCHLEP OPTIMIZATION COMPLETE',
+  'IF FOUND, RETURN TO SUNNYVALE',
+  'Waze says rerouting through the Negev',
+  'Hydration level: Kinneret-adjacent'
+];
+
+const easterMaterialItems = [
+  { name: 'Emergency rugelach', qty: '2 trays', note: 'morale system backup', assigneeId: '' },
+  { name: 'Backup hummus', qty: 'unreasonable quantity', note: 'hummus logistics remain unresolved', assigneeId: '' },
+  { name: 'Shabbat candles', qty: '2 + wind shield', note: 'playa-safe flame rules apply', assigneeId: '' },
+  { name: 'Yahrzeit-level windproof matches', qty: '1 box', note: 'for ceremonial resilience only', assigneeId: '' },
+  { name: "Golda's emergency coffee kit", qty: '1 kit', note: 'diplomatic strength', assigneeId: '' },
+  { name: 'One very opinionated campmate', qty: 'optional', note: 'do not pack near the DJ booth', assigneeId: '' },
+  { name: 'Extra zip ties', qty: 'because Moses forgot them in Exodus', note: '', assigneeId: '' }
+];
+
+const easterTaskItems = [
+  { phase: 'EASTER EGG :: CAMP VIBES', title: 'Check if the camp has achieved shalom bayit', done: false, assigneeId: '' },
+  { phase: 'EASTER EGG :: LOGISTICS', title: 'Appoint one person as Chief Schlep Officer', done: false, assigneeId: '' },
+  { phase: 'EASTER EGG :: SHADE', title: 'Bless the shade structure against wind', done: false, assigneeId: '' },
+  { phase: 'EASTER EGG :: SNACK SECURITY', title: 'Hide the good snacks from the ravers', done: false, assigneeId: '' },
+  { phase: 'EASTER EGG :: PARKING', title: 'Make sure nobody parks like Pharaoh', done: false, assigneeId: '' }
+];
+
+const secretPhraseActions = {
+  chai: () => setStatus('חי MODE :: +18 SPIRITUAL RESILIENCE'),
+  shalom: () => setStatus('Peace be upon this camp'),
+  sababa: () => { document.body.classList.add('sababa-pulse'); setStatus('SABABA GRID GLOW ENABLED'); setTimeout(() => document.body.classList.remove('sababa-pulse'), 1600); },
+  gefilte: () => setStatus('QUESTIONABLE PROVISIONING DETECTED'),
+  aliyah: () => { document.body.classList.add('aliyah-lift'); setStatus('ALIYAH MODE :: ASCENDING CAMP MAP'); setTimeout(() => document.body.classList.remove('aliyah-lift'), 2200); }
+};
+
+function activateShabbatShalomMode() {
+  document.body.classList.add('shabbat-shalom-mode');
+  setStatus('SHABBAT SHALOM :: NEXT YEAR IN BLACK ROCK CITY');
+}
+
+function setupEasterEggs() {
+  const title = document.getElementById('main-title');
+  if (title) title.addEventListener('click', () => {
+    titleClickCount++;
+    if (titleClickCount === 7) activateShabbatShalomMode();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    if (!/^[a-z]$/i.test(e.key)) return;
+    secretPhraseBuffer = (secretPhraseBuffer + e.key.toLowerCase()).slice(-24);
+    Object.entries(secretPhraseActions).forEach(([phrase, action]) => {
+      if (secretPhraseBuffer.endsWith(phrase)) action();
+    });
+  });
+  setInterval(() => {
+    if (Math.random() < 0.12) setStatus(easterStatusMessages[Math.floor(Math.random() * easterStatusMessages.length)]);
+  }, 45000);
+}
+
+function updateShabbatAwareMessage() {
+  const day = new Date().getDay();
+  const hour = new Date().getHours();
+  if (day === 5 && hour >= 16) setStatus('SHABBAT MODE: SAVE BEFORE SUNSET');
+  if (day === 6) setStatus('No deploys on Shabbos. Unless production is burning.');
+}
+
+function maybeAddEasterMaterials(cats) {
+  const extras = easterMaterialItems.filter((_, idx) => ((campData?.totalPpl || 0) + idx) % 3 === 0);
+  if (extras.length) cats.push({ title: '✡ SECRET STASH / תרבות', items: extras.map(x => ({ ...x })) });
+}
+
+function maybeAddEasterTasks(tasks) {
+  easterTaskItems.forEach((task, idx) => {
+    if (((campData?.vehicles?.length || 0) + idx) % 2 === 0) tasks.push({ ...task });
+  });
+}
+
+function drawHiddenCanvasEasterEggs(ctx, W, H) {
+  ctx.save();
+  ctx.font = '11px Share Tech Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  const hamsa = 'hamsa';
+  const pomegranate = 'pomegranate';
+  const candles = 'Shabbat candles';
+  const camel = 'camel';
+  ctx.fillText('🪬', 42, 44); // hamsa
+  ctx.fillText('🍎', W - 72, 98); // pomegranate-ish fallback
+  ctx.fillText('🕯️🕯️', W - 88, H - 84); // Shabbat candles
+  ctx.fillText('🐪', 118, H - 98); // camel
+  ctx.fillStyle = 'rgba(57,255,20,0.22)';
+  ctx.textAlign = 'left';
+  ctx.fillText('OPEN CAMPING / מדבר', 18, 70);
+  ctx.fillText('מקורות', W - 92, H - 104);
+  ctx.fillStyle = 'rgba(255,230,0,0.18)';
+  ctx.fillText('Kinneret-adjacent hydration node', W - 238, H - 64);
+  ctx.restore();
 }
 
 // ────────────────────────────────────────────────
@@ -1959,6 +2090,7 @@ function redrawCanvas() {
 
   // Overlays
   drawCompass(ctx, W - 55, 55, 40);
+  drawHiddenCanvasEasterEggs(ctx, W, H);
 
   const scaleBarFt = 20, scaleBarPx = ftToPx(scaleBarFt);
   ctx.fillStyle = 'rgba(57,255,20,0.7)';
@@ -2494,6 +2626,7 @@ function generateMaterials(data) {
     cats.push({ title: '💧 WATER SYSTEM', items: w });
   }
 
+  maybeAddEasterMaterials(cats);
   materialsData = normalizeMaterials(cats);
   renderMaterials();
 }
@@ -2551,7 +2684,9 @@ function normalizeTasks(tasks) {
 
 function generateTasks(data) {
   const instructions = getInstructionPhases(data);
-  tasksData = normalizeTasks(instructions.flatMap(ph => ph.steps.map(step => ({ phase: ph.title, title: step, done: false, assigneeId: '' }))));
+  const generatedTasks = instructions.flatMap(ph => ph.steps.map(step => ({ phase: ph.title, title: step, done: false, assigneeId: '' })));
+  maybeAddEasterTasks(generatedTasks);
+  tasksData = normalizeTasks(generatedTasks);
   renderTasks();
 }
 
@@ -2747,6 +2882,7 @@ function generateInstructions(data) {
 // INIT
 // ────────────────────────────────────────────────
 window.onload = function() {
+  setupEasterEggs();
   // Pre-mark checked features as active
   ['shade','kitchen','lounge','water'].forEach(k => {
     document.getElementById(`fi-${k}`).classList.add('active');
